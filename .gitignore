@@ -137,6 +137,9 @@ celerybeat.pid
 # Environments
 .env
 .envrc
+
+# Generated output files
+*.xlsx
 .venv
 env/
 venv/
