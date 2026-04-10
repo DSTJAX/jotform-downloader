@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>JotForm Downloader</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f0f2f5;
+      min-height: 100vh;
+      padding: 1rem;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      max-width: 600px;
+      margin: 0 auto 1.5rem;
+    }
+
+    .logo {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: #1a1a2e;
+    }
+
+    .logout-btn {
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: #6b7280;
+      background: none;
+      border: 1.5px solid #d1d5db;
+      border-radius: 6px;
+      padding: 0.4rem 0.85rem;
+      cursor: pointer;
+      transition: border-color 0.15s, color 0.15s;
+    }
+
+    .logout-btn:hover { border-color: #9ca3af; color: #374151; }
+
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 2px 16px rgba(0,0,0,0.10);
+      padding: 2rem 1.75rem;
+      width: 100%;
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    .card h1 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: #1a1a2e;
+      margin-bottom: 0.25rem;
+    }
+
+    .card p {
+      font-size: 0.875rem;
+      color: #6b7280;
+      margin-bottom: 1.5rem;
+    }
+
+    label {
+      display: block;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #374151;
+      margin-bottom: 0.4rem;
+    }
+
+    select {
+      width: 100%;
+      padding: 0.75rem 1rem;
+      font-size: 1rem;
+      border: 1.5px solid #d1d5db;
+      border-radius: 8px;
+      background: #fff;
+      outline: none;
+      cursor: pointer;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 0.875rem center;
+      padding-right: 2.5rem;
+      transition: border-color 0.15s;
+    }
+
+    select:focus { border-color: #4f46e5; }
+
+    .form-count {
+      font-size: 0.8rem;
+      color: #9ca3af;
+      margin-top: 0.4rem;
+      margin-bottom: 1.25rem;
+    }
+
+    .download-btn {
+      width: 100%;
+      padding: 0.85rem;
+      font-size: 1rem;
+      font-weight: 600;
+      color: #fff;
+      background: #4f46e5;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.15s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+    }
+
+    .download-btn:hover { background: #4338ca; }
+    .download-btn:active { background: #3730a3; }
+    .download-btn:disabled { background: #a5b4fc; cursor: not-allowed; }
+
+    .spinner {
+      display: none;
+      width: 18px;
+      height: 18px;
+      border: 2.5px solid rgba(255,255,255,0.4);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .empty {
+      text-align: center;
+      color: #9ca3af;
+      padding: 2rem 0;
+      font-size: 0.95rem;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="logo">JotForm Downloader</div>
+    <form method="post" action="/logout">
+      <button type="submit" class="logout-btn">Sign out</button>
+    </form>
+  </header>
+
+  <div class="card">
+    <h1>Download Submissions</h1>
+    <p>Select a form and click Download to get an Excel file of all submissions.</p>
+
+    {% if forms %}
+      <form method="post" action="/download" id="dl-form">
+        <label for="form_id">Form</label>
+        <select name="form_id" id="form_id" required>
+          <option value="" disabled selected>Choose a form…</option>
+          {% for form in forms %}
+            <option value="{{ form.id }}">{{ form.title or form.id }}</option>
+          {% endfor %}
+        </select>
+        {# Pass the selected title so the filename is readable #}
+        <input type="hidden" name="form_title" id="form_title">
+        <div class="form-count">{{ forms | length }} form{{ 's' if forms | length != 1 }}</div>
+        <button type="submit" class="download-btn" id="dl-btn">
+          <span id="btn-label">Download .xlsx</span>
+          <span class="spinner" id="spinner"></span>
+        </button>
+      </form>
+    {% else %}
+      <div class="empty">No forms found in your JotForm account.</div>
+    {% endif %}
+  </div>
+
+  <script>
+    const select = document.getElementById('form_id');
+    const titleInput = document.getElementById('form_title');
+    const form = document.getElementById('dl-form');
+    const btn = document.getElementById('dl-btn');
+    const spinner = document.getElementById('spinner');
+    const btnLabel = document.getElementById('btn-label');
+
+    if (select) {
+      select.addEventListener('change', () => {
+        const opt = select.options[select.selectedIndex];
+        titleInput.value = opt.text;
+      });
+
+      form.addEventListener('submit', () => {
+        btn.disabled = true;
+        btnLabel.textContent = 'Fetching…';
+        spinner.style.display = 'block';
+        // Re-enable after a few seconds in case the browser doesn't navigate away
+        setTimeout(() => {
+          btn.disabled = false;
+          btnLabel.textContent = 'Download .xlsx';
+          spinner.style.display = 'none';
+        }, 15000);
+      });
+    }
+  </script>
+</body>
+</html>
